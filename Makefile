@@ -63,8 +63,9 @@ audit:
 # BUILD
 # ==================================================================================== #
 
-current_time = $(shell date --iso-8601=seconds)
-linker_flags = '-s -X main.buildTime=${current_time}'
+current_time = $(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
+git_description = $(shell git describe --always --dirty)
+linker_flags = '-s -X main.buildTime=${current_time} -X main.version=${git_description}'
 
 ## build/api: build the cmd/api application
 .PHONY: build/api
