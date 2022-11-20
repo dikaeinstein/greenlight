@@ -64,7 +64,7 @@ audit:
 # ==================================================================================== #
 
 current_time = $(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
-git_description = $(shell git describe --always --dirty)
+git_description = $(shell git describe --always --dirty --tags --long)
 linker_flags = '-s -X main.buildTime=${current_time} -X main.version=${git_description}'
 
 ## build/api: build the cmd/api application
@@ -73,3 +73,30 @@ build/api:
 	@echo 'Building cmd/api...'
 	go build -ldflags=${linker_flags} -o=./bin/api ./cmd/api
 	GOOS=linux GOARCH=amd64 go build -ldflags=${linker_flags} -o=./bin/linux_amd64/api ./cmd/api
+
+# ==================================================================================== #
+# PRODUCTION
+# ==================================================================================== #
+
+production_host_ip = '165.227.167.58'
+
+## production/connect: connect to the production server
+.PHONY: production/connect
+production/connect:
+	ssh greenlight@${production_host_ip}
+
+## production/deploy/api: deploy the api to production
+.PHONY: production/deploy/api
+production/deploy/api:
+	rsync -P ./bin/linux_amd64/api greenlight@${production_host_ip}:~
+	rsync -rP --delete ./migrations greenlight@${production_host_ip}:~
+	rsync -P ./remote/production/api.service greenlight@${production_host_ip}:~
+	rsync -P ./remote/production/Caddyfile greenlight@${production_host_ip}:~
+	ssh -t greenlight@${production_host_ip} '\
+	  migrate -path ~/migrations -database $$GREENLIGHT_DB_DSN up \
+	  && sudo mv ~/api.service /etc/systemd/system/ \
+	  && sudo systemctl enable api \
+	  && sudo systemctl restart api \
+	  && sudo mv ~/Caddyfile /etc/caddy/ \
+	  && sudo systemctl reload caddy \
+	'
